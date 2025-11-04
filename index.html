@@ -2,158 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Ball Blitz Arena V4</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style>
-    html, body { margin:0; padding:0; background:#111; color:white; font-family:sans-serif; text-align:center; }
-    canvas { display:block; margin:20px auto; border:3px solid #333; background:#121214; }
-  </style>
+  <title>Ball Blitz Arena V4</title>
 
-  <!-- Import the p5.js and p5.play libraries (these match Code.org Game Lab’s engine) -->
+  <!-- p5.js (graphics engine) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/molleindustria/p5.play/lib/p5.play.js"></script>
+  <!-- p5.play (sprite + collision system) -->
+  <script src="https://cdn.jsdelivr.net/npm/p5.play@1.5.4/lib/p5.play.min.js"></script>
 </head>
-<body>
-  <h1>Ball Blitz Arena V4</h1>
-  <p>Player 1: WASD + F • Player 2: Arrows + L • Press H to toggle hints</p>
-
-  <script>
-    // === Your Game Code (pasted directly from Game Lab) ===
-
-    // Ball Blitz Arena - Code.org Game Lab
-    // 1:1-feel dodgeball clone (original code, different names/colors).
-    // Copy & paste whole file into Game Lab JavaScript and Run.
-
-    var W = 480;
-    var H = 480;
-    function setup(){ createCanvas(W, H); initRound(); }
-
-    var PLAYER_SIZE = 36;
-    var PLAYER_SPEED = 3.0;
-    var BALL_SIZE = 14;
-    var THROW_SPEED = 9;
-    var MAX_BALLS = 8;
-    var POWERUP_SIZE = 18;
-    var POWERUP_SPAWN_MS = 6000;
-    var POWERUP_DURATION = 7000;
-    var ROUND_RESTART_MS = 1800;
-    var WAVE_INCREASE_EVERY = 12;
-
-    var PLAYERS = [
-      { id: 1, x: 80,  y: H/2, color: "#e94b4b", left:"a", right:"d", up:"w", down:"s", throwKey:"f", name:"Red" },
-      { id: 2, x: W-80, y: H/2, color: "#3b82f6", left:"left", right:"right", up:"up", down:"down", throwKey:"l", name:"Blue" }
-    ];
-
-    var players = [], balls = [], powerups = [], eliminated = {}, lives = {}, scoreboard = {};
-    var roundActive = true, roundWinner = null;
-    var lastPowerupSpawn = 0, waveStart = 0, currentMaxBalls = 3;
-    var showHints = true;
-
-    function rand(min,max){ return Math.random()*(max-min)+min; }
-    function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
-
-    function initRound(){
-      if (allSprites) for (let i = allSprites.length-1; i >= 0; i--) allSprites[i].remove();
-      players=[]; balls=[]; powerups=[];
-      eliminated={}; lives={}; roundActive=true; roundWinner=null;
-      lastPowerupSpawn=millis(); waveStart=millis(); currentMaxBalls=3;
-      for (let i=0;i<PLAYERS.length;i++){
-        let cfg=PLAYERS[i];
-        let s=createSprite(cfg.x,cfg.y,PLAYER_SIZE,PLAYER_SIZE);
-        s.shapeColor=cfg.color;
-        s.playerId=cfg.id; s.name=cfg.name; s.speed=PLAYER_SPEED;
-        s.lastThrow=-9999; s.throwCooldown=350;
-        s.hasShieldUntil=0; s.speedUntil=0; s.multiUntil=0;
-        players.push(s);
-        eliminated[cfg.id]=false; lives[cfg.id]=1; scoreboard[cfg.id]=scoreboard[cfg.id]||0;
-      }
-    }
-
-    function spawnBall(x,y,vx,vy,owner){
-      if (balls.length>=MAX_BALLS) return;
-      let b=createSprite(x,y,BALL_SIZE,BALL_SIZE);
-      b.shapeColor="white"; b.velocity.x=vx; b.velocity.y=vy;
-      b.owner=owner; b.createdAt=millis(); balls.push(b);
-    }
-    function removeBall(b){ if(!b)return; b.remove(); balls.splice(balls.indexOf(b),1); }
-
-    var POWER_TYPES=["shield","speed","multi"];
-    function spawnPowerup(){
-      let pu=createSprite(rand(40,W-40),rand(80,H-40),POWERUP_SIZE,POWERUP_SIZE);
-      pu.type=POWER_TYPES[Math.floor(rand(0,POWER_TYPES.length))];
-      if(pu.type==="shield")pu.shapeColor="#7dd3fc";
-      if(pu.type==="speed")pu.shapeColor="#bbf7d0";
-      if(pu.type==="multi")pu.shapeColor="#fca5a5";
-      pu.spawnAt=millis(); powerups.push(pu);
-    }
-
-    function applyPowerToPlayer(s,type){
-      if(type==="shield")s.hasShieldUntil=millis()+POWERUP_DURATION;
-      if(type==="speed")s.speedUntil=millis()+POWERUP_DURATION;
-      if(type==="multi")s.multiUntil=millis()+POWERUP_DURATION;
-    }
-
-    function resolveHit(p,b){
-      if(p.hasShieldUntil>millis()){ p.hasShieldUntil=0; removeBall(b); return; }
-      removeBall(b);
-      lives[p.playerId]--;
-      if(lives[p.playerId]<=0){ eliminated[p.playerId]=true; p.visible=false; }
-    }
-
-    function handlePlayerControls(s,cfg){
-      if(eliminated[s.playerId])return;
-      let vx=0,vy=0;
-      if(keyDown(cfg.left))vx-=1;
-      if(keyDown(cfg.right))vx+=1;
-      if(keyDown(cfg.up))vy-=1;
-      if(keyDown(cfg.down))vy+=1;
-      let sp=s.speed;
-      if(s.speedUntil>millis())sp*=1.6;
-      if(vx||vy){let mag=Math.sqrt(vx*vx+vy*vy);vx=vx/mag*sp;vy=vy/mag*sp;}
-      s.velocity.x=vx;s.velocity.y=vy;
-      if(keyWentDown(cfg.throwKey)&&millis()-s.lastThrow>=s.throwCooldown){
-        s.lastThrow=millis();
-        let fx=vx!==0?vx/Math.abs(vx):1; let fy=vy!==0?vy/Math.abs(vy):0;
-        let px=s.x+fx*(PLAYER_SIZE/2+8), py=s.y+fy*(PLAYER_SIZE/2+4);
-        spawnBall(px,py,fx*THROW_SPEED,fy*THROW_SPEED,s.playerId);
-      }
-    }
-
-    function draw(){
-      background(18,18,20);
-      fill(255); textSize(12); textAlign(LEFT,TOP);
-      text("Ball Blitz Arena V4 — Press R to restart",10,8);
-
-      if(millis()-lastPowerupSpawn>POWERUP_SPAWN_MS && powerups.length<3){spawnPowerup();lastPowerupSpawn=millis();}
-      let secs=Math.floor((millis()-waveStart)/1000);
-      currentMaxBalls=3+Math.floor(secs/10);
-
-      for(let i=0;i<players.length;i++){handlePlayerControls(players[i],PLAYERS[i]);}
-
-      for(let bi=balls.length-1;bi>=0;bi--){
-        let b=balls[bi];
-        if(b.x<BALL_SIZE/2||b.x>W-BALL_SIZE/2)b.velocity.x*=-1;
-        if(b.y<72||b.y>H-BALL_SIZE/2)b.velocity.y*=-1;
-        for(let p of players){ if(!eliminated[p.playerId]&&b.overlap(p)&&b.owner!==p.playerId){resolveHit(p,b);break;} }
-        if(millis()-b.createdAt>11000)removeBall(b);
-      }
-
-      for(let pu_i=powerups.length-1;pu_i>=0;pu_i--){
-        let pu=powerups[pu_i];
-        for(let p of players){ if(!eliminated[p.playerId]&&pu.overlap(p)){applyPowerToPlayer(p,pu.type);removePowerup(pu);break;} }
-        if(millis()-pu.spawnAt>12000)removePowerup(pu);
-      }
-
-      drawSprites();
-      fill(255); textAlign(LEFT,TOP);
-      for(let i=0;i<PLAYERS.length;i++){
-        let id=PLAYERS[i].id;
-        text("P"+id+" ("+PLAYERS[i].name+"): "+(eliminated[id]?"ELIM":"Alive"),10,32+i*18);
-      }
-      textAlign(RIGHT,TOP);
-      text("Balls: "+balls.length+"/"+currentMaxBalls,W-10,8);
-      if(keyWentDown("r"))initRound();
-    }
-  </script>
+<body style="margin:0; background:#000; overflow:hidden;">
+  <main>
+    <script src="game.js"></script>
+  </main>
 </body>
 </html>
